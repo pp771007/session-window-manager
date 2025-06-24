@@ -1,90 +1,105 @@
 import tkinter as tk
 from tkinter import messagebox
-import pygetwindow as gw
-import win32process
 import win32gui
+import win32con
 
-# --- 設定 ---
+# --- 全域變數 ---
 APP_TITLE = "視窗佈局管理員"
-# psutil 不再是核心必需品，但保留它用於未來可能的除錯
-# from collections import defaultdict 也不再需要
-
-saved_layout_in_memory = []
-
-def get_window_hwnd(win):
-    """安全地獲取視窗的句柄 (HWND)"""
-    try:
-        # _hWnd 是 pygetwindow 儲存視窗句柄的內部屬性
-        return win._hWnd
-    except Exception:
-        return None
+saved_layout_in_memory = {}
+saved_z_order = []
 
 def save_window_positions(silent=False):
-    """掃描所有視窗並基於 HWND 儲存它們的佈局。"""
-    global saved_layout_in_memory
-    
-    current_layout = []
-    for win in gw.getAllWindows():
-        if win.isMinimized or not win.visible or not win.title or win.title == APP_TITLE:
-            continue
+    """儲存所有可見視窗的位置、大小和Z順序。"""
+    global saved_layout_in_memory, saved_z_order
 
-        hwnd = get_window_hwnd(win)
-        if hwnd:
-            current_layout.append({
-                "hwnd": hwnd,
-                "title_at_save": win.title, # 僅供錯誤報告使用
-                "left": win.left,
-                "top": win.top,
-                "width": win.width,
-                "height": win.height,
-            })
+    saved_layout_in_memory.clear()
+    saved_z_order.clear()
 
-    saved_layout_in_memory = current_layout
+    win = win32gui.GetTopWindow(0)
+    while win:
+        # 使用 GetWindowPlacement 檢查視窗是否最小化
+        placement = win32gui.GetWindowPlacement(win)
+        is_minimized = placement[1] == win32con.SW_SHOWMINIMIZED
+
+        if win32gui.IsWindowVisible(win) and win32gui.GetWindowText(win) and not is_minimized:
+            title = win32gui.GetWindowText(win)
+            if title != APP_TITLE:
+                rect = win32gui.GetWindowRect(win)
+                left, top, right, bottom = rect
+                saved_layout_in_memory[win] = {
+                    "title_at_save": title,
+                    "left": left, "top": top,
+                    "width": right - left, "height": bottom - top
+                }
+                saved_z_order.append(win)
+        
+        win = win32gui.GetWindow(win, win32con.GW_HWNDNEXT)
     
     if not silent:
-        messagebox.showinfo("成功", f"成功記錄 {len(saved_layout_in_memory)} 個視窗佈局！")
+        messagebox.showinfo("成功", f"成功記錄 {len(saved_z_order)} 個視窗的佈局與順序！")
     else:
-        print(f"初始佈局已自動記錄，共 {len(saved_layout_in_memory)} 個視窗。")
+        print(f"初始佈局與順序已自動記錄，共 {len(saved_z_order)} 個視窗。")
 
 def reset_window_positions():
-    """從記憶體讀取佈局並基於 HWND 恢復視窗位置。"""
-    global saved_layout_in_memory
+    """恢復所有已記錄視窗的位置、大小和Z順序。"""
+    global saved_layout_in_memory, saved_z_order
 
-    if not saved_layout_in_memory:
+    if not saved_layout_in_memory or not saved_z_order:
         messagebox.showwarning("警告", "記憶體中沒有佈局紀錄。")
         return
 
-    # 建立一個從當前 HWND 到視窗物件的快速查找地圖
-    current_window_map = {get_window_hwnd(win): win for win in gw.getAllWindows()}
-    
     restored_count = 0
     permission_denied_titles = []
-    not_found_titles = []
+    
+    current_hwnds = {hwnd for hwnd, layout in saved_layout_in_memory.items() if win32gui.IsWindow(hwnd)}
+    not_found_hwnds = set(saved_layout_in_memory.keys()) - current_hwnds
 
-    for saved_win_data in saved_layout_in_memory:
-        hwnd = saved_win_data["hwnd"]
-        title = saved_win_data["title_at_save"]
-
-        if hwnd in current_window_map:
-            # 視窗仍然存在，執行恢復
-            target_win = current_window_map[hwnd]
-            try:
-                if target_win.isMaximized: target_win.restore()
-                target_win.resizeTo(saved_win_data["width"], saved_win_data["height"])
-                target_win.moveTo(saved_win_data["left"], saved_win_data["top"])
-                restored_count += 1
-            except gw.PyGetWindowException as e:
-                if "Error code 5" in str(e) or "存取被拒" in str(e):
-                    permission_denied_titles.append(title)
-                else:
-                    print(f"恢復 '{title}' 時發生視窗控制錯誤: {e}")
-            except Exception as e:
-                print(f"恢復 '{title}' 時發生未知錯誤: {e}")
-        else:
-            # HWND 找不到了，說明這個視窗已經被關閉
-            not_found_titles.append(title)
+    # 1. 恢復位置和大小
+    for hwnd, layout in saved_layout_in_memory.items():
+        if hwnd in not_found_hwnds:
+            continue
+        try:
+            # --- 核心修改點 ---
+            # 使用 GetWindowPlacement 來檢查視窗狀態 (最小化或最大化)
+            placement = win32gui.GetWindowPlacement(hwnd)
+            if placement[1] == win32con.SW_SHOWMINIMIZED or placement[1] == win32con.SW_SHOWMAXIMIZED:
+                # 如果是最小化或最大化，先恢復到正常狀態
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             
-    # 產生最終報告
+            win32gui.SetWindowPos(hwnd, win32con.HWND_TOP, 
+                                 layout['left'], layout['top'], 
+                                 layout['width'], layout['height'], 0)
+            restored_count += 1
+        except Exception as e:
+            if hasattr(e, 'winerror') and e.winerror == 5:
+                permission_denied_titles.append(layout['title_at_save'])
+            else:
+                print(f"恢復 '{layout['title_at_save']}' 位置時出錯: {e}")
+
+    # 2. 恢復 Z-Order
+    for i in range(len(saved_z_order) - 2, -1, -1):
+        hwnd_to_place = saved_z_order[i]
+        hwnd_after = saved_z_order[i+1]
+        
+        if hwnd_to_place not in current_hwnds or hwnd_after not in current_hwnds:
+            continue
+        try:
+            win32gui.SetWindowPos(hwnd_to_place, hwnd_after, 0, 0, 0, 0,
+                                 win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+        except Exception:
+            pass 
+
+    # 3. 恢復焦點
+    if saved_z_order and saved_z_order[0] in current_hwnds:
+        try:
+            top_hwnd = saved_z_order[0]
+            win32gui.SetForegroundWindow(root.winfo_id()) 
+            win32gui.SetForegroundWindow(top_hwnd)
+        except Exception:
+            pass
+            
+    # 產生報告
+    not_found_titles = [saved_layout_in_memory[hwnd]['title_at_save'] for hwnd in not_found_hwnds]
     message = f"成功恢復 {restored_count} / {len(saved_layout_in_memory)} 個視窗！"
     if permission_denied_titles:
         message += f"\n\n權限不足，無法移動以下視窗：\n- " + "\n- ".join(set(permission_denied_titles))
@@ -96,10 +111,9 @@ def reset_window_positions():
     messagebox.showinfo("完成", message)
 
 def create_and_run_gui():
-    """建立圖形介面並執行"""
+    global root
     root = tk.Tk()
     root.title(APP_TITLE)
-
     try:
         root.iconbitmap('favicon.ico')
     except tk.TclError:
@@ -107,7 +121,7 @@ def create_and_run_gui():
 
     root.geometry("350x200")
     root.resizable(False, False)
-
+    
     window_width, window_height = 350, 200
     screen_width, screen_height = root.winfo_screenwidth(), root.winfo_screenheight()
     center_x = int(screen_width/2 - window_width / 2)
