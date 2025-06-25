@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 import win32gui
 import win32con
+import time
 
 # --- 全域變數 ---
 APP_TITLE = "視窗佈局管理員"
@@ -9,7 +10,7 @@ saved_layout_in_memory = {}
 saved_z_order = []
 
 def save_window_positions(silent=False):
-    """儲存所有可見視窗的位置、大小和Z順序。"""
+    """(重置)並儲存所有可見視窗的位置、大小和Z順序。"""
     global saved_layout_in_memory, saved_z_order
 
     saved_layout_in_memory.clear()
@@ -17,7 +18,6 @@ def save_window_positions(silent=False):
 
     win = win32gui.GetTopWindow(0)
     while win:
-        # 使用 GetWindowPlacement 檢查視窗是否最小化
         placement = win32gui.GetWindowPlacement(win)
         is_minimized = placement[1] == win32con.SW_SHOWMINIMIZED
 
@@ -36,7 +36,7 @@ def save_window_positions(silent=False):
         win = win32gui.GetWindow(win, win32con.GW_HWNDNEXT)
     
     if not silent:
-        messagebox.showinfo("成功", f"成功記錄 {len(saved_z_order)} 個視窗的佈局與順序！")
+        messagebox.showinfo("成功", f"成功記錄 {len(saved_z_order)} 個視窗的佈局與順序！\n（舊紀錄已被覆蓋）")
     else:
         print(f"初始佈局與順序已自動記錄，共 {len(saved_z_order)} 個視窗。")
 
@@ -59,11 +59,8 @@ def reset_window_positions():
         if hwnd in not_found_hwnds:
             continue
         try:
-            # --- 核心修改點 ---
-            # 使用 GetWindowPlacement 來檢查視窗狀態 (最小化或最大化)
             placement = win32gui.GetWindowPlacement(hwnd)
             if placement[1] == win32con.SW_SHOWMINIMIZED or placement[1] == win32con.SW_SHOWMAXIMIZED:
-                # 如果是最小化或最大化，先恢復到正常狀態
                 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
             
             win32gui.SetWindowPos(hwnd, win32con.HWND_TOP, 
@@ -110,6 +107,43 @@ def reset_window_positions():
         
     messagebox.showinfo("完成", message)
 
+def auto_update_layout():
+    """每分鐘掃描一次，只增加新出現的視窗資訊，不更動舊有紀錄。"""
+    global saved_layout_in_memory, saved_z_order
+    
+    newly_added_titles = []
+    
+    win = win32gui.GetTopWindow(0)
+    while win:
+        if win not in saved_layout_in_memory:
+            placement = win32gui.GetWindowPlacement(win)
+            is_minimized = placement[1] == win32con.SW_SHOWMINIMIZED
+
+            if win32gui.IsWindowVisible(win) and win32gui.GetWindowText(win) and not is_minimized:
+                title = win32gui.GetWindowText(win)
+                if title != APP_TITLE:
+                    rect = win32gui.GetWindowRect(win)
+                    left, top, right, bottom = rect
+                    saved_layout_in_memory[win] = {
+                        "title_at_save": title,
+                        "left": left, "top": top,
+                        "width": right - left, "height": bottom - top
+                    }
+                    saved_z_order.append(win)
+                    newly_added_titles.append(title)
+        
+        win = win32gui.GetWindow(win, win32con.GW_HWNDNEXT)
+    
+    if newly_added_titles:
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        print(f"[{timestamp}] 自動偵測並記錄 {len(newly_added_titles)} 個新視窗:")
+        for title in newly_added_titles:
+            print(f"  - {title}")
+        print(f"目前共記錄 {len(saved_layout_in_memory)} 個視窗。")
+
+    # 安排下一次檢查 (60000毫秒 = 1分鐘)
+    root.after(60000, auto_update_layout)
+
 def create_and_run_gui():
     global root
     root = tk.Tk()
@@ -132,16 +166,21 @@ def create_and_run_gui():
     frame = tk.Frame(root, padx=20, pady=10)
     frame.pack(expand=True)
     
-    info_label = tk.Label(frame, text="佈局僅存於記憶體，關閉後將遺失", fg="red", font=("Arial", 9))
+    info_label = tk.Label(frame, text="佈局存於記憶體，會自動偵測新視窗", fg="blue", font=("Arial", 9))
     info_label.pack(pady=(0, 10))
 
-    save_button = tk.Button(frame, text="儲存佈局", command=save_window_positions, font=("Arial", 12), width=25, height=2)
+    save_button = tk.Button(frame, text="手動儲存佈局 (覆蓋)", command=save_window_positions, font=("Arial", 12), width=25, height=2)
     save_button.pack(pady=5)
 
     reset_button = tk.Button(frame, text="恢復佈局", command=reset_window_positions, font=("Arial", 12), width=25, height=2)
     reset_button.pack(pady=5)
 
+    # 程式啟動時，先自動儲存一次
     root.after(100, lambda: save_window_positions(silent=True))
+    
+    # 在 1 分鐘後開始第一次自動更新檢查
+    print("程式已啟動，將在一分鐘後開始自動偵測新視窗...")
+    root.after(60000, auto_update_layout)
 
     root.mainloop()
 

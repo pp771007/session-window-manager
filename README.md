@@ -1,73 +1,72 @@
-# Session Window Manager
+# 視窗佈局管理員 (Window Layout Manager)
 
-![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Windows-0078D6.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+這是一個輕量級的 Windows 桌面工具，旨在幫助使用者快速儲存和恢復視窗的佈局。如果你經常需要為工作、遊戲或特定任務排列一組固定的應用程式視窗，這個工具可以讓你一鍵完成，省去手動調整的麻煩。
 
-一個輕量、僅限當前工作階段 (session-only) 的 Windows 視窗佈局管理工具。它能讓你一鍵儲存和恢復所有視窗的位置與大小，特別適合那些視窗標題會頻繁變動的應用程式。
+This is a lightweight desktop utility for Windows designed to help users quickly save and restore their window layouts. If you often arrange a specific set of application windows for work, gaming, or other tasks, this tool allows you to do it with a single click, saving you from tedious manual adjustments.
 
-![Screenshot of the tool](screenshot.png)
-*(提示：請將此處的 `screenshot.png` 替換為你的工具實際運作的截圖)*
+## ✨ 主要功能 (Features)
 
----
+*   **一鍵儲存 (One-Click Save):** 立即擷取所有可見視窗的位置、大小和層疊順序 (Z-order)。
+*   **一鍵恢復 (One-Click Restore):** 將已記錄的視窗恢復到它們被儲存時的狀態。
+*   **自動偵測新視窗 (Automatic New Window Detection):** 程式在背景每分鐘會自動掃描，並將新開啟的視窗加入佈局記憶體中，而不會影響原有的紀錄。
+*   **智慧型恢復 (Intelligent Restore):** 即使視窗被最小化或最大化，也能將其恢復到正常的視窗狀態和位置。
+*   **詳細報告 (Detailed Reports):** 恢復後會提供摘要，告知哪些視窗成功恢復、哪些因權限不足而失敗，以及哪些視窗已關閉而找不到。
+*   **簡潔介面 (Simple GUI):** 使用 Tkinter 打造，直觀易用，且會保持在所有視窗的最上層，方便操作。
 
-## ✨ 主要特色
+## 🚀 如何使用 (How to Use)
 
-*   **一鍵儲存與恢復**：簡潔的介面，只有「儲存佈局」和「恢復佈局」兩個核心功能。
-*   **基於 PID 追蹤**：使用處理程序ID (PID) 來識別視窗，而非視窗標題。這意味著即使視窗標題改變（例如瀏覽器分頁切換），工具依然能準確找到並恢復它。
-*   **純記憶體運作**：所有佈局資訊只儲存在記憶體中，關閉工具後不留下任何設定檔，保持系統乾淨。
-*   **啟動時自動儲存**：程式一啟動，就會自動儲存當前的視窗佈局作為初始狀態。
-*   **智慧型錯誤處理**：當遇到因權限不足而無法移動的視窗時，會優雅地跳過，並在最終報告中清晰列出是哪個應用程式無法被控制。
-*   **置頂顯示**：工具視窗會保持在最上層，方便隨時操作。
+### 1. 環境需求 (Prerequisites)
 
-## ⚙️ 安裝與需求
+你需要在你的 Windows 電腦上安裝 Python 和 `pywin32` 函式庫。
 
-本工具僅適用於 **Windows** 作業系統，並需要 **Python 3** 環境。
+*   **安裝 Python:**
+    從 [Python 官網](https://www.python.org/downloads/) 下載並安裝最新版本的 Python。**請務必在安裝過程中勾選 "Add Python to PATH"**。
 
-1.  **複製專案**
+*   **安裝 pywin32:**
+    打開命令提示字元 (CMD) 或 PowerShell，然後執行以下指令：
     ```bash
-    git clone https://github.com/YOUR_USERNAME/session-window-manager.git
-    cd session-window-manager
+    pip install pywin32
     ```
 
-2.  **安裝必要的套件**
-    本工具依賴以下 Python 套件：
+### 2. 執行程式 (Running the Application)
+
+1.  將程式碼儲存為一個 `.py` 檔案 (例如 `layout_manager.py`)。
+2.  (可選) 將一個名為 `favicon.ico` 的圖示檔案放在同一個資料夾，程式會自動將其設為視窗圖示。
+3.  打開命令提示字元 (CMD) 或 PowerShell，切換到檔案所在的目錄，然後執行：
     ```bash
-    pip install pygetwindow pywin32 psutil
+    python layout_manager.py
     ```
+4.  程式主視窗將會出現。
 
-## 🚀 如何使用
+## 📖 功能詳解 (Functional Breakdown)
 
-1.  **佈置你的工作區**：
-    在你執行此工具**之前**，先將所有你想要管理的應用程式視窗移動和縮放到你偏好的位置和大小。
+#### 程式啟動 (On Startup)
 
-2.  **執行腳本**：
-    打開命令提示字元 (CMD) 或 PowerShell，然後執行：
-    ```bash
-    python session-window-manager.py
-    ```
-    **⭐ 專業提示**：為了獲得最佳效果，建議以「**系統管理員身分**」執行此腳本。這能授權工具移動那些以更高權限執行的應用程式視窗（例如工作管理員、部分遊戲等），避免「存取被拒」的錯誤。
+*   程式啟動後，會立即在背景**靜默地儲存一次**所有當前可見視窗的佈局。這成為你的「初始佈局」。
+*   同時，它會啟動一個定時器，準備在一分鐘後開始自動偵測新視窗。
 
-3.  **操作工具**：
-    *   **自動儲存**：工具視窗出現時，它已經在背景自動幫你儲存了一次佈局。
-    *   **手動儲存**：如果你在之後調整了新的佈局，可以點擊「**儲存佈局**」按鈕來覆蓋舊的記錄。
-    *   **恢復佈局**：當視窗位置變亂時，點擊「**恢復佈局**」，所有被記錄的視窗將會回到你上次儲存的位置。
+#### 「手動儲存佈局 (覆蓋)」按鈕
 
-4.  **結束使用**：
-    直接關閉工具視窗即可。所有儲存的佈局將從記憶體中清除。
+*   點擊此按鈕會**完全清除**記憶體中現有的所有佈局紀錄。
+*   然後，它會重新掃描螢幕上所有可見的視窗，並建立一個全新的佈局「快照」。
+*   這適用於當你已經手動調整到一個完美的全新佈局，並希望將其設為新的基準點時。
 
-## 🛠️ 技術原理
+#### 「恢復佈局」按鈕
 
-*   **視窗識別**：透過 `pygetwindow` 獲取所有視窗物件，再利用 `win32gui` 和 `win32process` API 從視窗句柄 (HWND) 取得其對應的處理程序ID (PID)。
-*   **資料儲存**：佈局資料（包含PID、位置、大小及標題）被儲存在一個全域的 Python 列表中，實現純記憶體運作。
-*   **權限處理**：在恢復佈局時，使用 `try...except` 捕捉 `pygetwindow.PyGetWindowException`，並特別檢查錯誤碼 `5` (Access is denied)，以識別並報告權限問題。
+*   點擊此按鈕會讀取記憶體中的所有視窗紀錄（包括初始的和後來自動新增的）。
+*   它會嘗試將每一個還在開啟的視窗恢復到它被記錄時的**位置和大小**。
+*   對於手動儲存的佈局，它還會嘗試恢復視窗之間的**前後層疊順序 (Z-Order)**。
+*   完成後會彈出一個報告視窗。
 
-## ⚠️ 限制與注意事項
+#### 自動偵測 (Automatic Detection)
 
-*   **僅限 Windows**：由於使用了 Windows 專屬的 API，此工具無法在 macOS 或 Linux 上運行。
-*   **僅限當前工作階段**：這是一個**功能而非 bug**。一旦關閉程式或重新開機，所有儲存的 PID 都會失效，佈局記錄也會遺失。
-*   **單一視窗對應**：目前的邏輯是為每個 PID 記錄一個視窗。如果一個應用程式（如 Chrome）用同一個 PID 開啟了多個視窗，工具只會記錄並恢復它找到的第一個。
+*   程式啟動一分鐘後，會開始第一次自動檢查。此後每分鐘檢查一次。
+*   它只會尋找**新出現的、尚未被記錄的**視窗。
+*   當找到新視窗時，它會將其位置和大小加入到記憶體中，而**不會**影響或覆蓋任何舊的紀錄。
+*   偵測到新視窗的日誌會顯示在執行程式的**終端機視窗**中，而不是透過彈出視窗打擾使用者。
 
-## 📄 授權條款
+## ⚠️ 注意事項 (Important Notes)
 
-本專案採用 [MIT License](LICENSE) 授權。
+*   **佈局儲存於記憶體:** 所有佈局資訊都只存在於程式的記憶體中。**關閉程式後，所有紀錄都會遺失。**
+*   **系統管理員權限:** 如果你需要移動以「系統管理員身分」執行的程式視窗（例如：工作管理員），你需要同樣以「系統管理員身分」來執行此腳本。否則會出現「權限不足」的錯誤。
+*   **Z-Order 恢復限制:** Z-Order 的恢復主要針對「手動儲存」時的快照。後來自動新增的視窗在恢復時不會參與精確的 Z-Order 排序，以避免打亂原始的層疊關係。
