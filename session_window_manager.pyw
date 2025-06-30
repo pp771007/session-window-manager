@@ -45,9 +45,14 @@ class WindowLayoutManager:
         self.restore_button = tk.Button(frame, text="恢復佈局", command=self.restore_window_positions, font=("Arial", 12), width=25, height=2, state=tk.DISABLED)
         self.restore_button.pack(pady=5)
         
-        self.status_var = tk.StringVar(value="正在初始化...")
+        self.status_var = tk.StringVar()
         status_bar = tk.Label(self.root, textvariable=self.status_var, bd=1, relief=tk.SUNKEN, anchor=tk.W, padx=5)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self._set_status("正在初始化...")
+
+    def _set_status(self, message):
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        self.status_var.set(f"[{timestamp}] {message}")
 
     def _get_all_windows(self):
         valid_windows = []
@@ -84,7 +89,7 @@ class WindowLayoutManager:
             self.restore_button.config(state=tk.NORMAL)
         
         status_msg = f"佈局已儲存，共記錄 {len(self.saved_z_order)} 個視窗。"
-        self.status_var.set(status_msg)
+        self._set_status(status_msg)
         
         if silent:
             print(f"初始佈局與順序已自動記錄，共 {len(self.saved_z_order)} 個視窗。")
@@ -94,13 +99,15 @@ class WindowLayoutManager:
     def restore_window_positions(self):
         restored_count = 0
         permission_denied_titles = []
-        
-        current_hwnds = {hwnd for hwnd in self.saved_layout if win32gui.IsWindow(hwnd)}
-        not_found_hwnds = set(self.saved_layout.keys()) - current_hwnds
+
+        # Find and remove closed windows from the layout
+        closed_hwnds = [hwnd for hwnd in self.saved_layout if not win32gui.IsWindow(hwnd)]
+        for hwnd in closed_hwnds:
+            del self.saved_layout[hwnd]
+
+        current_hwnds = set(self.saved_layout.keys())
         
         for hwnd, layout in self.saved_layout.items():
-            if hwnd not in current_hwnds:
-                continue
             try:
                 placement = win32gui.GetWindowPlacement(hwnd)
                 if placement[1] in (win32con.SW_SHOWMINIMIZED, win32con.SW_SHOWMAXIMIZED):
@@ -135,21 +142,17 @@ class WindowLayoutManager:
             except Exception:
                 pass
         
-        not_found_titles = [self.saved_layout[hwnd]['title_at_save'] for hwnd in not_found_hwnds]
-        has_issues = bool(permission_denied_titles or not_found_titles)
+        has_issues = bool(permission_denied_titles)
 
         if not has_issues:
-            self.status_var.set(f"成功恢復所有 {restored_count} 個視窗！")
+            self._set_status(f"成功恢復 {restored_count} 個視窗！")
         else:
-            message = f"成功恢復 {restored_count} / {len(self.saved_layout)} 個視窗！"
+            message = f"成功恢復 {restored_count} / {len(current_hwnds)} 個視窗！"
             if permission_denied_titles:
                 message += f"\n\n權限不足，無法移動以下視窗：\n- " + "\n- ".join(sorted(set(permission_denied_titles)))
-            if not_found_titles:
-                message += f"\n\n找不到以下已關閉的視窗：\n- " + "\n- ".join(sorted(set(not_found_titles)))
-            if permission_denied_titles:
-                 message += "\n\n(提示：以系統管理員身分執行可解決權限問題)"
+                message += "\n\n(提示：以系統管理員身分執行可解決權限問題)"
             
-            self.status_var.set(f"恢復完成，但有 {len(permission_denied_titles) + len(not_found_titles)} 個問題。")
+            self._set_status(f"恢復完成，但有 {len(permission_denied_titles)} 個問題。")
             messagebox.showinfo("恢復報告", message)
 
     def auto_update_layout(self):
@@ -169,10 +172,9 @@ class WindowLayoutManager:
                 newly_added_titles.append(title)
 
         if newly_added_titles:
-            timestamp = time.strftime("%H:%M:%S", time.localtime())
-            status_msg = f"[{timestamp}] 自動偵測到 {len(newly_added_titles)} 個新視窗。"
-            self.status_var.set(status_msg)
-            print(status_msg)
+            status_msg = f"自動偵測到 {len(newly_added_titles)} 個新視窗。"
+            self._set_status(status_msg)
+            print(self.status_var.get())
             for title in newly_added_titles:
                 print(f"  - {title}")
             print(f"目前共記錄 {len(self.saved_layout)} 個視窗。")
