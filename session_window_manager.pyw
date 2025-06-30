@@ -24,7 +24,7 @@ class WindowLayoutManager:
         except tk.TclError:
             print("警告：找不到 'favicon.ico' 檔案，將使用預設圖示。")
 
-        window_width, window_height = 350, 220
+        window_width, window_height = 350, 160
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         center_x = int(screen_width / 2 - window_width / 2)
@@ -35,9 +35,6 @@ class WindowLayoutManager:
 
         frame = tk.Frame(self.root, padx=20, pady=10)
         frame.pack(expand=True, fill='both')
-
-        info_label = tk.Label(frame, text="佈局存於記憶體，會自動偵測新視窗", fg="blue", font=("Arial", 9))
-        info_label.pack(pady=(0, 10))
 
         save_button = tk.Button(frame, text="手動儲存佈局 (覆蓋)", command=self.save_window_positions, font=("Arial", 12), width=25, height=2)
         save_button.pack(pady=5)
@@ -62,7 +59,7 @@ class WindowLayoutManager:
             is_minimized = placement[1] == win32con.SW_SHOWMINIMIZED
             title = win32gui.GetWindowText(win)
 
-            if win32gui.IsWindowVisible(win) and title and not is_minimized and title != self.APP_TITLE:
+            if win32gui.IsWindowVisible(win) and title and not is_minimized:
                 valid_windows.append(win)
             
             win = win32gui.GetWindow(win, win32con.GW_HWNDNEXT)
