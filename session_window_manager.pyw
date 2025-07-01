@@ -99,6 +99,7 @@ class WindowLayoutManager:
 
         # Find and remove closed windows from the layout
         closed_hwnds = [hwnd for hwnd in self.saved_layout if not win32gui.IsWindow(hwnd)]
+        num_closed_windows = len(closed_hwnds)
         for hwnd in closed_hwnds:
             del self.saved_layout[hwnd]
 
@@ -141,15 +142,21 @@ class WindowLayoutManager:
         
         has_issues = bool(permission_denied_titles)
 
+        status_message = f"成功恢復 {restored_count} 個視窗"
+        if num_closed_windows > 0:
+            status_message += f" ({num_closed_windows} 個已不存在)"
+
         if not has_issues:
-            self._set_status(f"成功恢復 {restored_count} 個視窗！")
+            self._set_status(status_message + "。")
         else:
+            status_message += f"，另有 {len(permission_denied_titles)} 個權限問題。"
+            self._set_status(status_message)
+
             message = f"成功恢復 {restored_count} / {len(current_hwnds)} 個視窗！"
             if permission_denied_titles:
                 message += f"\n\n權限不足，無法移動以下視窗：\n- " + "\n- ".join(sorted(set(permission_denied_titles)))
                 message += "\n\n(提示：以系統管理員身分執行可解決權限問題)"
             
-            self._set_status(f"恢復完成，但有 {len(permission_denied_titles)} 個問題。")
             messagebox.showinfo("恢復報告", message)
 
     def auto_update_layout(self):
