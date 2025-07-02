@@ -31,7 +31,6 @@ class WindowLayoutManager:
         center_y = int(screen_height / 2 - window_height / 2)
         self.root.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
         self.root.resizable(False, False)
-        self.root.attributes('-topmost', True)
 
         frame = tk.Frame(self.root, padx=20, pady=10)
         frame.pack(expand=True, fill='both')
