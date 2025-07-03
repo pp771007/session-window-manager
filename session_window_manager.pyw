@@ -3,6 +3,7 @@ from tkinter import messagebox
 import win32gui
 import win32con
 import time
+import threading
 
 class WindowLayoutManager:
     def __init__(self, root):
@@ -38,7 +39,7 @@ class WindowLayoutManager:
         save_button = tk.Button(frame, text="手動儲存佈局 (覆蓋)", command=self.save_window_positions, font=("Arial", 12), width=25, height=2)
         save_button.pack(pady=5)
         
-        self.restore_button = tk.Button(frame, text="恢復佈局", command=self.restore_window_positions, font=("Arial", 12), width=25, height=2, state=tk.DISABLED)
+        self.restore_button = tk.Button(frame, text="恢復佈局", command=self.restore_window_positions_threaded, font=("Arial", 12), width=25, height=2, state=tk.DISABLED)
         self.restore_button.pack(pady=5)
         
         self.status_var = tk.StringVar()
@@ -92,11 +93,39 @@ class WindowLayoutManager:
         else:
             print(status_msg + " (舊紀錄已被覆蓋)")
 
+    def restore_window_positions_threaded(self):
+        self.restore_button.config(state=tk.DISABLED)
+        self._set_status("正在恢復佈局...")
+        
+        thread = threading.Thread(target=self.restore_window_positions)
+        thread.start()
+
+    def _finalize_restore(self, restored_count, num_closed_windows, permission_denied_titles, current_hwnds_len):
+        has_issues = bool(permission_denied_titles)
+
+        status_message = f"成功恢復 {restored_count} 個視窗"
+        if num_closed_windows > 0:
+            status_message += f" ({num_closed_windows} 個已不存在)"
+
+        if not has_issues:
+            self._set_status(status_message + "。")
+        else:
+            status_message += f"，另有 {len(permission_denied_titles)} 個權限問題。"
+            self._set_status(status_message)
+
+            message = f"成功恢復 {restored_count} / {current_hwnds_len} 個視窗！"
+            if permission_denied_titles:
+                message += f"\n\n權限不足，無法移動以下視窗：\n- " + "\n- ".join(sorted(set(permission_denied_titles)))
+                message += "\n\n(提示：以系統管理員身分執行可解決權限問題)"
+            
+            messagebox.showinfo("恢復報告", message)
+        
+        self.restore_button.config(state=tk.NORMAL)
+
     def restore_window_positions(self):
         restored_count = 0
         permission_denied_titles = []
 
-        # Find and remove closed windows from the layout
         closed_hwnds = [hwnd for hwnd in self.saved_layout if not win32gui.IsWindow(hwnd)]
         num_closed_windows = len(closed_hwnds)
         for hwnd in closed_hwnds:
@@ -139,24 +168,7 @@ class WindowLayoutManager:
             except Exception:
                 pass
         
-        has_issues = bool(permission_denied_titles)
-
-        status_message = f"成功恢復 {restored_count} 個視窗"
-        if num_closed_windows > 0:
-            status_message += f" ({num_closed_windows} 個已不存在)"
-
-        if not has_issues:
-            self._set_status(status_message + "。")
-        else:
-            status_message += f"，另有 {len(permission_denied_titles)} 個權限問題。"
-            self._set_status(status_message)
-
-            message = f"成功恢復 {restored_count} / {len(current_hwnds)} 個視窗！"
-            if permission_denied_titles:
-                message += f"\n\n權限不足，無法移動以下視窗：\n- " + "\n- ".join(sorted(set(permission_denied_titles)))
-                message += "\n\n(提示：以系統管理員身分執行可解決權限問題)"
-            
-            messagebox.showinfo("恢復報告", message)
+        self.root.after(0, self._finalize_restore, restored_count, num_closed_windows, permission_denied_titles, len(current_hwnds))
 
     def auto_update_layout(self):
         newly_added_titles = []
