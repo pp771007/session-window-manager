@@ -4,6 +4,18 @@ import win32gui
 import win32con
 import time
 import threading
+import sys
+import os
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 class WindowLayoutManager:
     def __init__(self, root):
@@ -21,7 +33,7 @@ class WindowLayoutManager:
     def _setup_gui(self):
         self.root.title(self.APP_TITLE)
         try:
-            self.root.iconbitmap('favicon.ico')
+            self.root.iconbitmap(resource_path('favicon.ico'))
         except tk.TclError:
             print("警告：找不到 'favicon.ico' 檔案，將使用預設圖示。")
 
