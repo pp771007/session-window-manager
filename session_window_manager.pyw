@@ -48,10 +48,14 @@ class WindowLayoutManager:
         frame = tk.Frame(self.root, padx=20, pady=10)
         frame.pack(expand=True, fill='both')
 
-        save_button = tk.Button(frame, text="手動儲存佈局 (覆蓋)", command=self.save_window_positions, font=("Arial", 12), width=25, height=2)
+        save_button = tk.Button(frame, text="手動儲存佈局 (覆蓋)", command=self.save_window_positions, 
+                                font=("Arial", 12), width=25, height=2, 
+                                bg="#cce5ff", activebackground="#b8daff", relief=tk.FLAT)
         save_button.pack(pady=5)
         
-        self.restore_button = tk.Button(frame, text="恢復佈局", command=self.restore_window_positions_threaded, font=("Arial", 12), width=25, height=2, state=tk.DISABLED)
+        self.restore_button = tk.Button(frame, text="恢復佈局", command=self.restore_window_positions_threaded, 
+                                        font=("Arial", 12), width=25, height=2, 
+                                        bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT, state=tk.DISABLED)
         self.restore_button.pack(pady=5)
         
         self.status_var = tk.StringVar()
