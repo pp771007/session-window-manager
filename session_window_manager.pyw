@@ -151,6 +151,11 @@ class WindowLayoutManager:
         
         for hwnd, layout in self.saved_layout.items():
             try:
+                title = layout.get('title_at_save', '未知視窗')
+                # 使用 after 來確保 UI 更新在主執行緒中執行
+                self.root.after(0, self._set_status, f"正在恢復: {title}")
+                time.sleep(0.05) # 短暫延遲，讓使用者能看到狀態更新
+
                 placement = win32gui.GetWindowPlacement(hwnd)
                 if placement[1] in (win32con.SW_SHOWMINIMIZED, win32con.SW_SHOWMAXIMIZED):
                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
