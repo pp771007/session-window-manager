@@ -149,12 +149,13 @@ class WindowLayoutManager:
 
         current_hwnds = set(self.saved_layout.keys())
         
+        flags = win32con.SWP_ASYNCWINDOWPOS
+
         for hwnd, layout in self.saved_layout.items():
             try:
                 title = layout.get('title_at_save', '未知視窗')
                 # 使用 after 來確保 UI 更新在主執行緒中執行
                 self.root.after(0, self._set_status, f"正在恢復: {title}")
-                time.sleep(0.05) # 短暫延遲，讓使用者能看到狀態更新
 
                 placement = win32gui.GetWindowPlacement(hwnd)
                 if placement[1] in (win32con.SW_SHOWMINIMIZED, win32con.SW_SHOWMAXIMIZED):
@@ -162,22 +163,25 @@ class WindowLayoutManager:
                 
                 win32gui.SetWindowPos(hwnd, win32con.HWND_TOP, 
                                      layout['left'], layout['top'], 
-                                     layout['width'], layout['height'], 0)
+                                     layout['width'], layout['height'], flags)
                 restored_count += 1
             except Exception as e:
                 if hasattr(e, 'winerror') and e.winerror == 5:
                     permission_denied_titles.append(layout['title_at_save'])
                 else:
                     print(f"恢復 '{layout['title_at_save']}' 位置時出錯: {e}")
-
+        
+        z_order_flags = (win32con.SWP_NOMOVE | 
+                        win32con.SWP_NOSIZE | 
+                        win32con.SWP_ASYNCWINDOWPOS)
+        
         for i in range(len(self.saved_z_order) - 2, -1, -1):
             hwnd_to_place = self.saved_z_order[i]
             hwnd_after = self.saved_z_order[i+1]
             
             if hwnd_to_place in current_hwnds and hwnd_after in current_hwnds:
                 try:
-                    win32gui.SetWindowPos(hwnd_to_place, hwnd_after, 0, 0, 0, 0,
-                                         win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+                    win32gui.SetWindowPos(hwnd_to_place, hwnd_after, 0, 0, 0, 0, z_order_flags)
                 except Exception:
                     pass 
 
