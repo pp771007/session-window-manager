@@ -55,7 +55,7 @@ class WindowLayoutManager:
         
         self.restore_button = tk.Button(frame, text="恢復佈局", command=self.restore_window_positions_threaded, 
                                         font=("Arial", 12), width=25, height=2, 
-                                        bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT, state=tk.DISABLED)
+                                        bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT)
         self.restore_button.pack(pady=5)
         
         self.status_var = tk.StringVar()
@@ -97,9 +97,6 @@ class WindowLayoutManager:
                 "left": left, "top": top,
                 "width": right - left, "height": bottom - top
             }
-
-        if self.saved_layout:
-            self.restore_button.config(state=tk.NORMAL)
         
         status_msg = f"佈局已儲存，共記錄 {len(self.saved_z_order)} 個視窗。"
         self._set_status(status_msg)
@@ -110,7 +107,6 @@ class WindowLayoutManager:
             print(status_msg + " (舊紀錄已被覆蓋)")
 
     def restore_window_positions_threaded(self):
-        self.restore_button.config(state=tk.DISABLED)
         self._set_status("正在恢復佈局...")
         
         thread = threading.Thread(target=self.restore_window_positions)
@@ -135,8 +131,6 @@ class WindowLayoutManager:
                 message += "\n\n(提示：以系統管理員身分執行可解決權限問題)"
             
             messagebox.showinfo("恢復報告", message)
-        
-        self.restore_button.config(state=tk.NORMAL)
 
     def restore_window_positions(self):
         restored_count = 0
