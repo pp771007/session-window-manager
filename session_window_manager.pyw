@@ -23,7 +23,6 @@ class WindowLayoutManager:
         self.APP_TITLE = "視窗佈局管理員"
         
         self.saved_layout = {}
-        self.saved_z_order = []
 
         self._setup_gui()
         
@@ -67,8 +66,8 @@ class WindowLayoutManager:
         timestamp = time.strftime("%H:%M:%S", time.localtime())
         self.status_var.set(f"[{timestamp}] {message}")
 
-    def _get_all_windows_with_zorder(self):
-        """獲取所有視窗並按正確的 Z-order 排序（由上到下）"""
+    def _get_all_windows(self):
+        """獲取所有可見的有標題視窗"""
         windows_info = []
         
         def enum_windows_proc(hwnd, lParam):
@@ -81,21 +80,13 @@ class WindowLayoutManager:
                         windows_info.append(hwnd)
             return True
         
-        # 使用 EnumWindows 來獲取正確的 Z-order
         win32gui.EnumWindows(enum_windows_proc, 0)
         return windows_info
 
-    def _get_all_windows(self):
-        """保留原有方法作為備用"""
-        return self._get_all_windows_with_zorder()
-
     def save_window_positions(self, silent=False):
         self.saved_layout.clear()
-        self.saved_z_order.clear()
 
-        # 使用新的方法獲取視窗
-        all_windows = self._get_all_windows_with_zorder()
-        self.saved_z_order = all_windows.copy()
+        all_windows = self._get_all_windows()
 
         for hwnd in all_windows:
             title = win32gui.GetWindowText(hwnd)
@@ -107,63 +98,19 @@ class WindowLayoutManager:
                 "width": right - left, "height": bottom - top
             }
         
-        status_msg = f"佈局已儲存，共記錄 {len(self.saved_z_order)} 個視窗。"
+        status_msg = f"佈局已儲存，共記錄 {len(self.saved_layout)} 個視窗。"
         self._set_status(status_msg)
         
         if silent:
-            print(f"初始佈局與順序已自動記錄，共 {len(self.saved_z_order)} 個視窗。")
+            print(f"初始佈局已自動記錄，共 {len(self.saved_layout)} 個視窗。")
         else:
             print(status_msg + " (舊紀錄已被覆蓋)")
-            # 印出 Z-order 供除錯
-            print("Z-order (由上到下):")
-            for i, hwnd in enumerate(self.saved_z_order):
-                title = win32gui.GetWindowText(hwnd)
-                print(f"  {i+1}. {title}")
 
     def restore_window_positions_threaded(self):
         self._set_status("正在恢復佈局...")
         
         thread = threading.Thread(target=self.restore_window_positions)
         thread.start()
-
-    def _restore_zorder(self, current_hwnds):
-        """恢復 Z-order，由底層往上層處理"""
-        print("開始恢復 Z-order...")
-        
-        # 過濾出仍存在的視窗
-        valid_zorder = [hwnd for hwnd in self.saved_z_order if hwnd in current_hwnds]
-        
-        if not valid_zorder:
-            print("  沒有有效的視窗需要恢復 Z-order")
-            return
-        
-        try:
-            # 從最底層開始，將每個視窗設到最上層
-            # 這樣最後處理的視窗會在最上層
-            for i, hwnd in enumerate(reversed(valid_zorder)):
-                try:
-                    title = win32gui.GetWindowText(hwnd)
-                    print(f"  設定 Z-order ({len(valid_zorder)-i}/{len(valid_zorder)}): {title}")
-                    
-                    # 先確保視窗可見且未最小化
-                    placement = win32gui.GetWindowPlacement(hwnd)
-                    if placement[1] == win32con.SW_SHOWMINIMIZED:
-                        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                    
-                    # 將視窗移到最上層
-                    win32gui.SetWindowPos(hwnd, win32con.HWND_TOP, 
-                                        0, 0, 0, 0,
-                                        win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
-                    
-                    time.sleep(0.02)  # 短暫延遲讓系統處理
-                    
-                except Exception as e:
-                    print(f"    設定 {title} Z-order 失敗: {e}")
-            
-            print("Z-order 恢復完成")
-            
-        except Exception as e:
-            print(f"恢復 Z-order 時發生錯誤: {e}")
 
     def _finalize_restore(self, restored_count, num_closed_windows, permission_denied_titles, current_hwnds_len):
         has_issues = bool(permission_denied_titles)
@@ -199,12 +146,12 @@ class WindowLayoutManager:
         
         print(f"開始恢復 {len(current_hwnds)} 個視窗的位置...")
         
-        # 先恢復位置和大小
+        # 恢復位置和大小
         for hwnd, layout in self.saved_layout.items():
             try:
                 title = layout.get('title_at_save', '未知視窗')
                 self.root.after(0, self._set_status, f"正在恢復位置: {title}")
-                time.sleep(0.05)
+                time.sleep(0.03)
 
                 placement = win32gui.GetWindowPlacement(hwnd)
                 if placement[1] in (win32con.SW_SHOWMINIMIZED, win32con.SW_SHOWMAXIMIZED):
@@ -225,7 +172,7 @@ class WindowLayoutManager:
                     win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST,
                                         layout['left'], layout['top'],
                                         layout['width'], layout['height'], 
-                                        win32con.SWP_NOZORDER)  # 先不改變 Z-order
+                                        0)
                 
                 restored_count += 1
 
@@ -234,13 +181,6 @@ class WindowLayoutManager:
                     permission_denied_titles.append(layout['title_at_save'])
                 else:
                     print(f"恢復 '{layout['title_at_save']}' 位置時出錯: {e}")
-
-        # 位置調整完成後，恢復 Z-order
-        print("位置恢復完成，開始恢復視窗層級...")
-        self.root.after(0, self._set_status, "正在恢復視窗層級...")
-        time.sleep(0.1)  # 讓位置調整完成
-        
-        self._restore_zorder(current_hwnds)
         
         self.root.after(0, self._finalize_restore, restored_count, num_closed_windows, permission_denied_titles, len(current_hwnds))
 
@@ -259,11 +199,6 @@ class WindowLayoutManager:
                     "width": right - left, "height": bottom - top
                 }
                 newly_added_titles.append(title)
-                
-                # 同時更新 Z-order 列表
-                if hwnd not in self.saved_z_order:
-                    # 新視窗加入到最上層
-                    self.saved_z_order.insert(0, hwnd)
 
         if newly_added_titles:
             status_msg = f"自動偵測到 {len(newly_added_titles)} 個新視窗。"
