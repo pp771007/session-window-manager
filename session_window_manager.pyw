@@ -41,8 +41,8 @@ class WindowLayoutManager:
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         center_x = int(screen_width / 2 - window_width / 2)
-        center_y = int(screen_height / 2 - window_height / 2)
-        self.root.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
+        bottom_y = int(screen_height - window_height - 78)
+        self.root.geometry(f'{window_width}x{window_height}+{center_x}+{bottom_y}')
         self.root.resizable(False, False)
 
         frame = tk.Frame(self.root, padx=20, pady=10)
