@@ -44,22 +44,31 @@ class WindowLayoutManager:
         self.root.geometry(f'{window_width}x{window_height}+{center_x}+{bottom_y}')
         self.root.resizable(False, False)
 
-        frame = tk.Frame(self.root, padx=20, pady=10)
-        frame.pack(expand=True, fill='both')
+        frame = tk.Frame(self.root, padx=20, pady=5)
+        frame.pack(fill='both', expand=False)
 
-        save_button = tk.Button(frame, text="手動儲存佈局 (覆蓋)", command=self.save_window_positions, 
-                                font=("Arial", 12), width=25, height=2, 
+        # 第一行：儲存按鈕和齒輪按鈕
+        button_row1 = tk.Frame(frame)
+        button_row1.pack(pady=3, fill=tk.X)
+        
+        save_button = tk.Button(button_row1, text="手動儲存佈局 (覆蓋)", command=self.save_window_positions, 
+                                font=("Arial", 12), height=2, 
                                 bg="#cce5ff", activebackground="#b8daff", relief=tk.FLAT)
-        save_button.pack(pady=5)
+        save_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        view_button = tk.Button(button_row1, text="⚙", command=self.open_layout_editor, 
+                                font=("Arial", 14), width=4, height=2, 
+                                bg="#ffe5b4", activebackground="#ffd699", relief=tk.FLAT)
+        view_button.pack(side=tk.LEFT, padx=(5, 0))
         
         self.restore_button = tk.Button(frame, text="恢復佈局", command=self.restore_window_positions_threaded, 
-                                        font=("Arial", 12), width=25, height=2, 
+                                        font=("Arial", 12), height=2, 
                                         bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT)
-        self.restore_button.pack(pady=5)
+        self.restore_button.pack(pady=3, fill=tk.X)
         
         self.status_var = tk.StringVar()
         status_bar = tk.Label(self.root, textvariable=self.status_var, bd=1, relief=tk.SUNKEN, anchor=tk.W, padx=5)
-        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X, ipady=2)
         self._set_status("正在初始化...")
 
     def _set_status(self, message):
@@ -209,6 +218,381 @@ class WindowLayoutManager:
             print(f"目前共記錄 {len(self.saved_layout)} 個視窗。")
 
         self.root.after(60000, self.auto_update_layout)
+
+    def open_layout_editor(self):
+        """開啟佈局編輯視窗"""
+        if not self.saved_layout:
+            messagebox.showwarning("提醒", "目前沒有記錄任何視窗。")
+            return
+        
+        editor_window = tk.Toplevel(self.root)
+        editor_window.title("編輯視窗佈局")
+        editor_window.geometry("900x500")
+        
+        try:
+            editor_window.iconbitmap(resource_path('favicon.ico'))
+        except tk.TclError:
+            pass
+        
+        # 窗口置中
+        editor_window.update_idletasks()
+        screen_width = editor_window.winfo_screenwidth()
+        screen_height = editor_window.winfo_screenheight()
+        window_width = editor_window.winfo_width()
+        window_height = editor_window.winfo_height()
+        center_x = int(screen_width / 2 - window_width / 2)
+        center_y = int(screen_height / 2 - window_height / 2)
+        editor_window.geometry(f"900x500+{center_x}+{center_y}")
+        
+        # 標題欄
+        header_frame = tk.Frame(editor_window, bg="#f0f0f0", padx=10, pady=10)
+        header_frame.pack(fill=tk.X)
+        header_label = tk.Label(header_frame, text=f"共有 {len(self.saved_layout)} 個記錄的視窗 (雙擊直接編輯)", 
+                               font=("Arial", 12, "bold"), bg="#f0f0f0")
+        header_label.pack()
+        
+        # 樹狀視圖框架
+        tree_frame = tk.Frame(editor_window)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # 垂直滾動條
+        vsb = tk.Scrollbar(tree_frame, orient=tk.VERTICAL)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # 水平滾動條
+        hsb = tk.Scrollbar(tree_frame, orient=tk.HORIZONTAL)
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # 樹狀視圖
+        from tkinter import ttk
+        columns = ("x", "y", "width", "height")
+        tree = ttk.Treeview(tree_frame, columns=columns, height=15, yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        vsb.config(command=tree.yview)
+        hsb.config(command=tree.xview)
+        
+        tree.column("#0", anchor=tk.W, width=350, minwidth=200)
+        tree.column("x", anchor=tk.CENTER, width=80)
+        tree.column("y", anchor=tk.CENTER, width=80)
+        tree.column("width", anchor=tk.CENTER, width=80)
+        tree.column("height", anchor=tk.CENTER, width=80)
+        
+        tree.heading("#0", text="視窗標題", anchor=tk.W)
+        tree.heading("x", text="X")
+        tree.heading("y", text="Y")
+        tree.heading("width", text="Width")
+        tree.heading("height", text="Height")
+        
+        # 加載數據到樹狀視圖
+        for hwnd, layout in self.saved_layout.items():
+            title = layout.get('title_at_save', '未知視窗')
+            x = layout['left']
+            y = layout['top']
+            width = layout['width']
+            height = layout['height']
+            tree.insert("", "end", iid=str(hwnd), text=title,
+                       values=(x, y, width, height))
+        
+        tree.pack(fill=tk.BOTH, expand=True)
+        
+        # 雙擊編輯事件
+        def on_double_click(event):
+            item = tree.identify('item', event.x, event.y)
+            if not item:
+                return
+            
+            hwnd = int(item)
+            
+            if hwnd in self.saved_layout:
+                self.open_full_edit_dialog(hwnd, item, tree)
+        
+        tree.bind("<Double-1>", on_double_click)
+        
+        # 關閉按鈕框架
+        button_frame = tk.Frame(editor_window, padx=10, pady=10)
+        button_frame.pack(fill=tk.X)
+        
+        close_btn = tk.Button(button_frame, text="關閉", command=editor_window.destroy, 
+                             font=("Arial", 10), width=15)
+        close_btn.pack(side=tk.RIGHT, padx=5)
+
+    def open_full_edit_dialog(self, hwnd, hwnd_str, tree):
+        """編輯所有參數的對話框"""
+        layout = self.saved_layout[hwnd]
+        title = layout.get('title_at_save', '未知視窗')
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("編輯視窗位置")
+        dialog.geometry("350x280")
+        dialog.resizable(False, False)
+        
+        try:
+            dialog.iconbitmap(resource_path('favicon.ico'))
+        except tk.TclError:
+            pass
+        
+        # 窗口置中
+        dialog.update_idletasks()
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        window_width = dialog.winfo_width()
+        window_height = dialog.winfo_height()
+        center_x = int(screen_width / 2 - window_width / 2)
+        center_y = int(screen_height / 2 - window_height / 2)
+        dialog.geometry(f"350x280+{center_x}+{center_y}")
+        
+        # 標題
+        title_label = tk.Label(dialog, text=f"視窗: {title}", 
+                              font=("Arial", 10, "bold"), wraplength=330)
+        title_label.pack(pady=10, padx=10)
+        
+        # 表單框架
+        form_frame = tk.Frame(dialog, padx=20, pady=10)
+        form_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # X 座標
+        tk.Label(form_frame, text="X:", font=("Arial", 10)).grid(row=0, column=0, sticky=tk.W, pady=8)
+        x_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        x_entry.insert(0, str(layout['left']))
+        x_entry.grid(row=0, column=1, sticky=tk.W, padx=10)
+        
+        # Y 座標
+        tk.Label(form_frame, text="Y:", font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W, pady=8)
+        y_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        y_entry.insert(0, str(layout['top']))
+        y_entry.grid(row=1, column=1, sticky=tk.W, padx=10)
+        
+        # 寬度
+        tk.Label(form_frame, text="Width:", font=("Arial", 10)).grid(row=2, column=0, sticky=tk.W, pady=8)
+        width_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        width_entry.insert(0, str(layout['width']))
+        width_entry.grid(row=2, column=1, sticky=tk.W, padx=10)
+        
+        # 高度
+        tk.Label(form_frame, text="Height:", font=("Arial", 10)).grid(row=3, column=0, sticky=tk.W, pady=8)
+        height_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        height_entry.insert(0, str(layout['height']))
+        height_entry.grid(row=3, column=1, sticky=tk.W, padx=10)
+        
+        # 按鈕框架
+        button_frame = tk.Frame(dialog, padx=20, pady=10)
+        button_frame.pack(fill=tk.X)
+        
+        def save_all():
+            try:
+                x = int(x_entry.get())
+                y = int(y_entry.get())
+                width = int(width_entry.get())
+                height = int(height_entry.get())
+                
+                if width <= 0 or height <= 0:
+                    messagebox.showerror("錯誤", "寬度和高度必須大於 0。")
+                    return
+                
+                # 更新記錄
+                layout['left'] = x
+                layout['top'] = y
+                layout['width'] = width
+                layout['height'] = height
+                
+                # 更新樹狀視圖
+                tree.item(hwnd_str, values=(x, y, width, height))
+                
+                # 立即應用到視窗
+                if win32gui.IsWindow(hwnd):
+                    try:
+                        placement = win32gui.GetWindowPlacement(hwnd)
+                        if placement[1] in (win32con.SW_SHOWMINIMIZED, win32con.SW_SHOWMAXIMIZED):
+                            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                        
+                        win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST,
+                                            layout['left'], layout['top'],
+                                            layout['width'], layout['height'], 0)
+                    except Exception as e:
+                        print(f"應用視窗位置時出錯: {e}")
+                
+                dialog.destroy()
+            
+            except ValueError:
+                messagebox.showerror("錯誤", "請輸入有效的數字。")
+        
+        # 按鍵綁定
+        dialog.bind("<Return>", lambda e: save_all())
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+        
+        save_btn = tk.Button(button_frame, text="確定", command=save_all, 
+                            font=("Arial", 10), bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT, width=10)
+        save_btn.pack(side=tk.LEFT, padx=5)
+        
+        cancel_btn = tk.Button(button_frame, text="取消", command=dialog.destroy, 
+                              font=("Arial", 10), width=10)
+        cancel_btn.pack(side=tk.LEFT, padx=5)
+
+    def open_quick_edit_dialog(self, hwnd, hwnd_str, tree, col_index):
+        """快速編輯對話框"""
+        layout = self.saved_layout[hwnd]
+        title = layout.get('title_at_save', '未知視窗')
+        
+        col_names = ["X", "Y", "寬度", "高度"]
+        col_keys = ["left", "top", "width", "height"]
+        col_current_values = [layout['left'], layout['top'], layout['width'], layout['height']]
+        
+        if col_index >= len(col_names):
+            return
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"編輯 {col_names[col_index]}")
+        dialog.geometry("300x150")
+        dialog.resizable(False, False)
+        
+        try:
+            dialog.iconbitmap(resource_path('favicon.ico'))
+        except tk.TclError:
+            pass
+        
+        # 窗口置中
+        dialog.update_idletasks()
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        window_width = dialog.winfo_width()
+        window_height = dialog.winfo_height()
+        center_x = int(screen_width / 2 - window_width / 2)
+        center_y = int(screen_height / 2 - window_height / 2)
+        dialog.geometry(f"300x150+{center_x}+{center_y}")
+        
+        # 標題
+        title_label = tk.Label(dialog, text=f"視窗: {title}", 
+                              font=("Arial", 10, "bold"), wraplength=280)
+        title_label.pack(pady=10, padx=10)
+        
+        # 輸入框
+        tk.Label(dialog, text=f"{col_names[col_index]}:", font=("Arial", 10)).pack(pady=5)
+        entry = tk.Entry(dialog, font=("Arial", 12), width=20)
+        entry.insert(0, str(col_current_values[col_index]))
+        entry.pack(pady=5)
+        entry.select_range(0, tk.END)
+        entry.focus()
+        
+        def save_value():
+            try:
+                new_value = int(entry.get())
+                
+                if col_index >= 2 and new_value <= 0:  # 寬度和高度必須大於 0
+                    messagebox.showerror("錯誤", f"{col_names[col_index]} 必須大於 0。")
+                    return
+                
+                # 更新記錄
+                layout[col_keys[col_index]] = new_value
+                
+                # 更新樹狀視圖
+                new_values = [layout['left'], layout['top'], layout['width'], layout['height']]
+                tree.item(hwnd_str, values=new_values)
+                
+                # 立即應用到視窗
+                if win32gui.IsWindow(hwnd):
+                    try:
+                        placement = win32gui.GetWindowPlacement(hwnd)
+                        if placement[1] in (win32con.SW_SHOWMINIMIZED, win32con.SW_SHOWMAXIMIZED):
+                            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                        
+                        win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST,
+                                            layout['left'], layout['top'],
+                                            layout['width'], layout['height'], 0)
+                    except Exception as e:
+                        print(f"應用視窗位置時出錯: {e}")
+                
+                dialog.destroy()
+            
+            except ValueError:
+                messagebox.showerror("錯誤", "請輸入有效的數字。")
+        
+        # 按鍵綁定
+        entry.bind("<Return>", lambda e: save_value())
+        entry.bind("<Escape>", lambda e: dialog.destroy())
+        
+        save_btn = tk.Button(dialog, text="確定", command=save_value, 
+                            font=("Arial", 10), bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT, width=15)
+        save_btn.pack(pady=10)
+
+    def open_edit_dialog(self, hwnd_str, tree):
+        """打開編輯對話框"""
+        hwnd = int(hwnd_str)
+        layout = self.saved_layout[hwnd]
+        
+        dialog = tk.Toplevel(self.root)
+        dialog.title("編輯視窗位置")
+        dialog.geometry("400x300")
+        dialog.resizable(False, False)
+        
+        # 標題顯示
+        title_label = tk.Label(dialog, text=f"視窗: {layout.get('title_at_save', '未知視窗')}", 
+                              font=("Arial", 11, "bold"), wraplength=380)
+        title_label.pack(pady=10, padx=10)
+        
+        # 表單框架
+        form_frame = tk.Frame(dialog, padx=20, pady=10)
+        form_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # X 座標
+        tk.Label(form_frame, text="X 座標:", font=("Arial", 10)).grid(row=0, column=0, sticky=tk.W, pady=8)
+        x_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        x_entry.insert(0, str(layout['left']))
+        x_entry.grid(row=0, column=1, sticky=tk.W, padx=10)
+        
+        # Y 座標
+        tk.Label(form_frame, text="Y 座標:", font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W, pady=8)
+        y_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        y_entry.insert(0, str(layout['top']))
+        y_entry.grid(row=1, column=1, sticky=tk.W, padx=10)
+        
+        # 寬度
+        tk.Label(form_frame, text="寬度:", font=("Arial", 10)).grid(row=2, column=0, sticky=tk.W, pady=8)
+        width_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        width_entry.insert(0, str(layout['width']))
+        width_entry.grid(row=2, column=1, sticky=tk.W, padx=10)
+        
+        # 高度
+        tk.Label(form_frame, text="高度:", font=("Arial", 10)).grid(row=3, column=0, sticky=tk.W, pady=8)
+        height_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        height_entry.insert(0, str(layout['height']))
+        height_entry.grid(row=3, column=1, sticky=tk.W, padx=10)
+        
+        # 按鈕框架
+        button_frame = tk.Frame(dialog, padx=20, pady=10)
+        button_frame.pack(fill=tk.X)
+        
+        def save_changes():
+            try:
+                x = int(x_entry.get())
+                y = int(y_entry.get())
+                width = int(width_entry.get())
+                height = int(height_entry.get())
+                
+                if width <= 0 or height <= 0:
+                    messagebox.showerror("錯誤", "寬度和高度必須大於 0。")
+                    return
+                
+                # 更新記錄
+                self.saved_layout[hwnd]['left'] = x
+                self.saved_layout[hwnd]['top'] = y
+                self.saved_layout[hwnd]['width'] = width
+                self.saved_layout[hwnd]['height'] = height
+                
+                # 更新樹狀視圖
+                tree.item(hwnd_str, values=(layout.get('title_at_save', '未知視窗'), x, y, width, height))
+                
+                messagebox.showinfo("成功", "位置已更新！")
+                dialog.destroy()
+            
+            except ValueError:
+                messagebox.showerror("錯誤", "請輸入有效的數字。")
+        
+        save_btn = tk.Button(button_frame, text="儲存", command=save_changes, 
+                            font=("Arial", 10), bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT, width=10)
+        save_btn.pack(side=tk.LEFT, padx=5)
+        
+        cancel_btn = tk.Button(button_frame, text="取消", command=dialog.destroy, 
+                              font=("Arial", 10), width=10)
+        cancel_btn.pack(side=tk.LEFT, padx=5)
 
 if __name__ == "__main__":
     root = tk.Tk()
