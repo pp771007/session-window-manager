@@ -47,11 +47,11 @@ class WindowLayoutManager:
         frame = tk.Frame(self.root, padx=20, pady=5)
         frame.pack(fill='both', expand=False)
 
-        # 第一行：儲存按鈕和齒輪按鈕
+        # 第一行:儲存按鈕和齒輪按鈕
         button_row1 = tk.Frame(frame)
         button_row1.pack(pady=3, fill=tk.X)
         
-        save_button = tk.Button(button_row1, text="手動儲存佈局 (覆蓋)", command=self.save_window_positions, 
+        save_button = tk.Button(button_row1, text="💾 手動儲存佈局 (覆蓋)", command=self.save_window_positions, 
                                 font=("Arial", 12), height=2, 
                                 bg="#cce5ff", activebackground="#b8daff", relief=tk.FLAT)
         save_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -61,7 +61,7 @@ class WindowLayoutManager:
                                 bg="#ffe5b4", activebackground="#ffd699", relief=tk.FLAT)
         view_button.pack(side=tk.LEFT, padx=(5, 0))
         
-        self.restore_button = tk.Button(frame, text="恢復佈局", command=self.restore_window_positions_threaded, 
+        self.restore_button = tk.Button(frame, text="🔄 恢復佈局", command=self.restore_window_positions_threaded, 
                                         font=("Arial", 12), height=2, 
                                         bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT)
         self.restore_button.pack(pady=3, fill=tk.X)
