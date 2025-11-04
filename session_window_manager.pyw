@@ -322,7 +322,7 @@ class WindowLayoutManager:
         
         dialog = tk.Toplevel(self.root)
         dialog.title("編輯視窗位置")
-        dialog.geometry("350x280")
+        dialog.geometry("350x310")
         dialog.resizable(False, False)
         
         try:
@@ -338,40 +338,51 @@ class WindowLayoutManager:
         window_height = dialog.winfo_height()
         center_x = int(screen_width / 2 - window_width / 2)
         center_y = int(screen_height / 2 - window_height / 2)
-        dialog.geometry(f"350x280+{center_x}+{center_y}")
+        dialog.geometry(f"350x310+{center_x}+{center_y}")
         
         # 標題
         title_label = tk.Label(dialog, text=f"視窗: {title}", 
                               font=("Arial", 10, "bold"), wraplength=330)
         title_label.pack(pady=10, padx=10)
         
+        # 狀態列
+        status_var = tk.StringVar()
+        status_var.set("請輸入新的座標和尺寸")
+        status_label = tk.Label(dialog, textvariable=status_var, 
+                               font=("Arial", 9), fg="#666666", wraplength=330)
+        status_label.pack(pady=(0, 5))
+        
         # 表單框架
         form_frame = tk.Frame(dialog, padx=20, pady=10)
         form_frame.pack(fill=tk.BOTH, expand=True)
         
+        # 讓表單框架的列置中
+        form_frame.grid_columnconfigure(0, weight=1)
+        form_frame.grid_columnconfigure(1, weight=1)
+        
         # X 座標
-        tk.Label(form_frame, text="X:", font=("Arial", 10)).grid(row=0, column=0, sticky=tk.W, pady=8)
-        x_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        tk.Label(form_frame, text="X:", font=("Arial", 10)).grid(row=0, column=0, pady=8, sticky=tk.E, padx=(0, 5))
+        x_entry = tk.Entry(form_frame, font=("Arial", 10), width=15, justify='center')
         x_entry.insert(0, str(layout['left']))
-        x_entry.grid(row=0, column=1, sticky=tk.W, padx=10)
+        x_entry.grid(row=0, column=1, pady=8, sticky=tk.W, padx=(5, 0))
         
         # Y 座標
-        tk.Label(form_frame, text="Y:", font=("Arial", 10)).grid(row=1, column=0, sticky=tk.W, pady=8)
-        y_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        tk.Label(form_frame, text="Y:", font=("Arial", 10)).grid(row=1, column=0, pady=8, sticky=tk.E, padx=(0, 5))
+        y_entry = tk.Entry(form_frame, font=("Arial", 10), width=15, justify='center')
         y_entry.insert(0, str(layout['top']))
-        y_entry.grid(row=1, column=1, sticky=tk.W, padx=10)
+        y_entry.grid(row=1, column=1, pady=8, sticky=tk.W, padx=(5, 0))
         
         # 寬度
-        tk.Label(form_frame, text="Width:", font=("Arial", 10)).grid(row=2, column=0, sticky=tk.W, pady=8)
-        width_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        tk.Label(form_frame, text="寬度:", font=("Arial", 10)).grid(row=2, column=0, pady=8, sticky=tk.E, padx=(0, 5))
+        width_entry = tk.Entry(form_frame, font=("Arial", 10), width=15, justify='center')
         width_entry.insert(0, str(layout['width']))
-        width_entry.grid(row=2, column=1, sticky=tk.W, padx=10)
+        width_entry.grid(row=2, column=1, pady=8, sticky=tk.W, padx=(5, 0))
         
         # 高度
-        tk.Label(form_frame, text="Height:", font=("Arial", 10)).grid(row=3, column=0, sticky=tk.W, pady=8)
-        height_entry = tk.Entry(form_frame, font=("Arial", 10), width=20)
+        tk.Label(form_frame, text="高度:", font=("Arial", 10)).grid(row=3, column=0, pady=8, sticky=tk.E, padx=(0, 5))
+        height_entry = tk.Entry(form_frame, font=("Arial", 10), width=15, justify='center')
         height_entry.insert(0, str(layout['height']))
-        height_entry.grid(row=3, column=1, sticky=tk.W, padx=10)
+        height_entry.grid(row=3, column=1, pady=8, sticky=tk.W, padx=(5, 0))
         
         # 按鈕框架
         button_frame = tk.Frame(dialog, padx=20, pady=10)
@@ -385,7 +396,8 @@ class WindowLayoutManager:
                 height = int(height_entry.get())
                 
                 if width <= 0 or height <= 0:
-                    messagebox.showerror("錯誤", "寬度和高度必須大於 0。")
+                    status_var.set("❌ 錯誤：寬度和高度必須大於 0")
+                    status_label.config(fg="red")
                     return
                 
                 # 更新記錄
@@ -407,25 +419,30 @@ class WindowLayoutManager:
                         win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST,
                                             layout['left'], layout['top'],
                                             layout['width'], layout['height'], 0)
+                        status_var.set("✓ 位置已成功更新並套用")
+                        status_label.config(fg="green")
                     except Exception as e:
-                        print(f"應用視窗位置時出錯: {e}")
-                
-                dialog.destroy()
+                        status_var.set(f"❌ 套用失敗：{str(e)}")
+                        status_label.config(fg="red")
+                else:
+                    status_var.set("⚠ 視窗已不存在，但記錄已更新")
+                    status_label.config(fg="orange")
             
             except ValueError:
-                messagebox.showerror("錯誤", "請輸入有效的數字。")
+                status_var.set("❌ 錯誤：請輸入有效的數字")
+                status_label.config(fg="red")
         
         # 按鍵綁定
         dialog.bind("<Return>", lambda e: save_all())
         dialog.bind("<Escape>", lambda e: dialog.destroy())
         
         save_btn = tk.Button(button_frame, text="確定", command=save_all, 
-                            font=("Arial", 10), bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT, width=10)
-        save_btn.pack(side=tk.LEFT, padx=5)
+                            font=("Arial", 10), bg="#d4edda", activebackground="#c3e6cb", relief=tk.FLAT)
+        save_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         
-        cancel_btn = tk.Button(button_frame, text="取消", command=dialog.destroy, 
-                              font=("Arial", 10), width=10)
-        cancel_btn.pack(side=tk.LEFT, padx=5)
+        cancel_btn = tk.Button(button_frame, text="關閉", command=dialog.destroy, 
+                              font=("Arial", 10))
+        cancel_btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
 
     def open_quick_edit_dialog(self, hwnd, hwnd_str, tree, col_index):
         """快速編輯對話框"""
