@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import messagebox
 import win32gui
 import win32con
+import win32process
+import win32api
 import time
 import threading
 import sys
@@ -266,7 +268,7 @@ class WindowLayoutManager:
         # 樹狀視圖
         from tkinter import ttk
         columns = ("x", "y", "width", "height")
-        tree = ttk.Treeview(tree_frame, columns=columns, height=15, yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        tree = ttk.Treeview(tree_frame, columns=columns, height=15, yscrollcommand=vsb.set, xscrollcommand=hsb.set, selectmode="extended")
         vsb.config(command=tree.yview)
         hsb.config(command=tree.xview)
         
@@ -307,6 +309,91 @@ class WindowLayoutManager:
         
         tree.bind("<Double-1>", on_double_click)
         
+        # 強制關閉選中視窗的功能
+        def force_close_selected():
+            """強制關閉選中的視窗"""
+            selected = tree.selection()
+            if not selected:
+                messagebox.showwarning("提示", "請先選擇要關閉的視窗。", parent=editor_window)
+                return
+            
+            # 收集要關閉的視窗資訊
+            windows_to_close = []
+            windows_not_exist = []
+            
+            for item in selected:
+                hwnd = int(item)
+                layout = self.saved_layout.get(hwnd)
+                if layout:
+                    title = layout.get('title_at_save', '未知視窗')
+                    if win32gui.IsWindow(hwnd):
+                        windows_to_close.append((hwnd, item, title))
+                    else:
+                        windows_not_exist.append((hwnd, item, title))
+            
+            # 處理已不存在的視窗
+            if windows_not_exist:
+                titles = "\n- ".join([t for _, _, t in windows_not_exist])
+                result = messagebox.askyesno("視窗已不存在", 
+                                            f"以下 {len(windows_not_exist)} 個視窗已不存在:\n\n- {titles}\n\n是否從記錄中移除?",
+                                            parent=editor_window)
+                if result:
+                    for hwnd, item, _ in windows_not_exist:
+                        if hwnd in self.saved_layout:
+                            del self.saved_layout[hwnd]
+                        tree.delete(item)
+            
+            # 處理要關閉的視窗
+            if not windows_to_close:
+                return
+            
+            # 確認對話框
+            if len(windows_to_close) == 1:
+                title = windows_to_close[0][2]
+                msg = f"確定要強制關閉視窗:\n\n{title}\n\n此操作無法復原。"
+            else:
+                titles = "\n- ".join([t for _, _, t in windows_to_close])
+                msg = f"確定要強制關閉以下 {len(windows_to_close)} 個視窗:\n\n- {titles}\n\n此操作無法復原。"
+            
+            result = messagebox.askyesno("確認關閉", msg, parent=editor_window)
+            if not result:
+                return
+            
+            # 執行關閉
+            success_count = 0
+            failed_list = []
+            
+            for hwnd, item, title in windows_to_close:
+                try:
+                    # 嘗試正常關閉
+                    win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                    time.sleep(0.05)
+                    
+                    # 如果視窗還在,強制終止
+                    if win32gui.IsWindow(hwnd):
+                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                        handle = win32api.OpenProcess(1, False, pid)
+                        win32api.TerminateProcess(handle, 0)
+                        win32api.CloseHandle(handle)
+                    
+                    # 從記錄中移除
+                    if hwnd in self.saved_layout:
+                        del self.saved_layout[hwnd]
+                    tree.delete(item)
+                    success_count += 1
+                    
+                except Exception as e:
+                    failed_list.append(f"{title}: {str(e)}")
+            
+            # 顯示結果
+            if failed_list:
+                fail_msg = "\n- ".join(failed_list)
+                messagebox.showwarning("部分失敗", 
+                                      f"成功關閉 {success_count} 個視窗\n失敗 {len(failed_list)} 個:\n\n- {fail_msg}",
+                                      parent=editor_window)
+            else:
+                messagebox.showinfo("成功", f"已成功關閉 {success_count} 個視窗", parent=editor_window)
+        
         # 關閉按鈕框架
         button_frame = tk.Frame(editor_window, padx=10, pady=10)
         button_frame.pack(fill=tk.X)
@@ -314,6 +401,11 @@ class WindowLayoutManager:
         close_btn = tk.Button(button_frame, text="關閉", command=editor_window.destroy, 
                              font=("Arial", 10), width=15)
         close_btn.pack(side=tk.RIGHT, padx=5)
+        
+        force_close_btn = tk.Button(button_frame, text="強制關閉選中視窗", command=force_close_selected,
+                                   font=("Arial", 10), width=18,
+                                   bg="#f8d7da", activebackground="#f5c6cb", relief=tk.FLAT)
+        force_close_btn.pack(side=tk.RIGHT, padx=5)
 
     def open_full_edit_dialog(self, hwnd, hwnd_str, tree):
         """編輯所有參數的對話框"""
