@@ -414,7 +414,6 @@ class WindowLayoutManager:
         
         dialog = tk.Toplevel(self.root)
         dialog.title("編輯視窗位置")
-        dialog.geometry("350x310")
         dialog.resizable(False, False)
         
         try:
@@ -422,31 +421,26 @@ class WindowLayoutManager:
         except tk.TclError:
             pass
         
-        # 窗口置中
-        dialog.update_idletasks()
-        screen_width = dialog.winfo_screenwidth()
-        screen_height = dialog.winfo_screenheight()
-        window_width = dialog.winfo_width()
-        window_height = dialog.winfo_height()
-        center_x = int(screen_width / 2 - window_width / 2)
-        center_y = int(screen_height / 2 - window_height / 2)
-        dialog.geometry(f"350x310+{center_x}+{center_y}")
+        # 標題框架 - 使用 Frame 包裹以便更好控制
+        title_frame = tk.Frame(dialog, padx=10, pady=8)
+        title_frame.pack(fill=tk.X)
         
-        # 標題
-        title_label = tk.Label(dialog, text=f"視窗: {title}", 
-                              font=("Arial", 10, "bold"), wraplength=330)
-        title_label.pack(pady=10, padx=10)
+        # 標題 - 不設固定高度,讓它自動調整
+        title_label = tk.Label(title_frame, text=f"視窗: {title}", 
+                              font=("Arial", 10, "bold"), wraplength=330, justify=tk.LEFT,
+                              anchor=tk.W)
+        title_label.pack(fill=tk.X)
         
         # 狀態列
         status_var = tk.StringVar()
         status_var.set("請輸入新的座標和尺寸")
         status_label = tk.Label(dialog, textvariable=status_var, 
                                font=("Arial", 9), fg="#666666", wraplength=330)
-        status_label.pack(pady=(0, 5))
+        status_label.pack(pady=(5, 10), padx=10)
         
         # 表單框架
-        form_frame = tk.Frame(dialog, padx=20, pady=10)
-        form_frame.pack(fill=tk.BOTH, expand=True)
+        form_frame = tk.Frame(dialog, padx=20, pady=5)
+        form_frame.pack(fill=tk.X)
         
         # 讓表單框架的列置中
         form_frame.grid_columnconfigure(0, weight=1)
@@ -477,8 +471,24 @@ class WindowLayoutManager:
         height_entry.grid(row=3, column=1, pady=8, sticky=tk.W, padx=(5, 0))
         
         # 按鈕框架
-        button_frame = tk.Frame(dialog, padx=20, pady=10)
-        button_frame.pack(fill=tk.X)
+        button_frame = tk.Frame(dialog, padx=20, pady=15)
+        button_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        
+        # 更新視窗以獲取實際尺寸
+        dialog.update_idletasks()
+        
+        # 根據標題實際高度動態調整對話框大小
+        title_height = title_label.winfo_reqheight()
+        dialog_width = 350
+        # 基礎高度 + 標題實際高度
+        base_height = 270  # 狀態列 + 表單 + 按鈕的基礎高度
+        dialog_height = base_height + title_height + 16  # 16 是 title_frame 的 pady
+        
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        center_x = int(screen_width / 2 - dialog_width / 2)
+        center_y = int(screen_height / 2 - dialog_height / 2)
+        dialog.geometry(f"{dialog_width}x{dialog_height}+{center_x}+{center_y}")
         
         def save_all():
             try:
