@@ -284,8 +284,11 @@ class WindowLayoutManager:
         tree.heading("width", text="Width")
         tree.heading("height", text="Height")
         
-        # 加載數據到樹狀視圖
-        for hwnd, layout in self.saved_layout.items():
+        # 加載數據到樹狀視圖 - 按 x 軸排序，x 相同時按 y 軸排序（由小到大）
+        sorted_windows = sorted(self.saved_layout.items(), 
+                               key=lambda item: (item[1]['left'], item[1]['top']))
+        
+        for hwnd, layout in sorted_windows:
             title = layout.get('title_at_save', '未知視窗')
             x = layout['left']
             y = layout['top']
