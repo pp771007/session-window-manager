@@ -77,8 +77,49 @@ class WindowLayoutManager:
         timestamp = time.strftime("%H:%M:%S", time.localtime())
         self.status_var.set(f"[{timestamp}] {message}")
 
+    def _should_exclude_window(self, hwnd):
+        """檢查視窗是否應該被排除（系統程式）"""
+        try:
+            # 獲取進程ID
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            
+            # 獲取進程路徑
+            handle = win32api.OpenProcess(win32con.PROCESS_QUERY_INFORMATION | win32con.PROCESS_VM_READ, False, pid)
+            exe_path = win32process.GetModuleFileNameEx(handle, 0)
+            win32api.CloseHandle(handle)
+            
+            # 轉換為小寫便於比較
+            exe_path_lower = exe_path.lower()
+            
+            # 排除 Program Manager（桌面背景視窗）：標題為 "Program Manager" 且進程為 explorer.exe
+            title = win32gui.GetWindowText(hwnd)
+            if title == "Program Manager" and 'explorer.exe' in exe_path_lower:
+                return True
+            
+            # 保留檔案總管視窗
+            if 'explorer.exe' in exe_path_lower:
+                return False
+            
+            # 排除系統資料夾下的程式
+            system_paths = [
+                'c:\\windows\\system32\\',
+                'c:\\windows\\systemapps\\',
+                'c:\\windows\\immersivecontrolpanel\\',
+                'c:\\program files\\windowsapps\\'
+            ]
+            
+            for sys_path in system_paths:
+                if exe_path_lower.startswith(sys_path):
+                    return True
+            
+            return False
+            
+        except Exception:
+            # 如果無法獲取進程資訊，預設不排除
+            return False
+
     def _get_all_windows(self):
-        """獲取所有可見的有標題視窗"""
+        """獲取所有可見的有標題視窗（排除系統程式）"""
         windows_info = []
         
         def enum_windows_proc(hwnd, lParam):
@@ -88,7 +129,9 @@ class WindowLayoutManager:
                     placement = win32gui.GetWindowPlacement(hwnd)
                     is_minimized = placement[1] == win32con.SW_SHOWMINIMIZED
                     if not is_minimized:
-                        windows_info.append(hwnd)
+                        # 排除系統程式
+                        if not self._should_exclude_window(hwnd):
+                            windows_info.append(hwnd)
             return True
         
         win32gui.EnumWindows(enum_windows_proc, 0)
@@ -103,10 +146,25 @@ class WindowLayoutManager:
             title = win32gui.GetWindowText(hwnd)
             rect = win32gui.GetWindowRect(hwnd)
             left, top, right, bottom = rect
+            
+            # 獲取執行檔路徑和名稱
+            exe_path = ""
+            exe_name = ""
+            try:
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                handle = win32api.OpenProcess(win32con.PROCESS_QUERY_INFORMATION | win32con.PROCESS_VM_READ, False, pid)
+                exe_path = win32process.GetModuleFileNameEx(handle, 0)
+                exe_name = os.path.basename(exe_path)
+                win32api.CloseHandle(handle)
+            except Exception:
+                pass
+            
             self.saved_layout[hwnd] = {
                 "title_at_save": title,
                 "left": left, "top": top,
-                "width": right - left, "height": bottom - top
+                "width": right - left, "height": bottom - top,
+                "exe_path": exe_path,
+                "exe_name": exe_name
             }
         
         status_msg = f"佈局已儲存，共記錄 {len(self.saved_layout)} 個視窗。"
@@ -204,10 +262,25 @@ class WindowLayoutManager:
                 title = win32gui.GetWindowText(hwnd)
                 rect = win32gui.GetWindowRect(hwnd)
                 left, top, right, bottom = rect
+                
+                # 獲取執行檔路徑和名稱
+                exe_path = ""
+                exe_name = ""
+                try:
+                    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                    handle = win32api.OpenProcess(win32con.PROCESS_QUERY_INFORMATION | win32con.PROCESS_VM_READ, False, pid)
+                    exe_path = win32process.GetModuleFileNameEx(handle, 0)
+                    exe_name = os.path.basename(exe_path)
+                    win32api.CloseHandle(handle)
+                except Exception:
+                    pass
+                
                 self.saved_layout[hwnd] = {
                     "title_at_save": title,
                     "left": left, "top": top,
-                    "width": right - left, "height": bottom - top
+                    "width": right - left, "height": bottom - top,
+                    "exe_path": exe_path,
+                    "exe_name": exe_name
                 }
                 newly_added_titles.append(title)
 
@@ -414,6 +487,8 @@ class WindowLayoutManager:
         """編輯所有參數的對話框"""
         layout = self.saved_layout[hwnd]
         title = layout.get('title_at_save', '未知視窗')
+        exe_name = layout.get('exe_name', '')
+        exe_path = layout.get('exe_path', '')
         
         dialog = tk.Toplevel(self.root)
         dialog.title("編輯視窗位置")
@@ -433,6 +508,22 @@ class WindowLayoutManager:
                               font=("Arial", 10, "bold"), wraplength=330, justify=tk.LEFT,
                               anchor=tk.W)
         title_label.pack(fill=tk.X)
+        
+        # 執行檔資訊
+        if exe_name:
+            exe_info_frame = tk.Frame(dialog, padx=10, pady=5, bg="#f8f9fa")
+            exe_info_frame.pack(fill=tk.X)
+            
+            exe_name_label = tk.Label(exe_info_frame, text=f"執行檔: {exe_name}", 
+                                     font=("Arial", 8), fg="#495057", bg="#f8f9fa",
+                                     anchor=tk.W)
+            exe_name_label.pack(fill=tk.X)
+            
+            if exe_path:
+                exe_path_label = tk.Label(exe_info_frame, text=f"路徑: {exe_path}", 
+                                         font=("Arial", 8), fg="#6c757d", bg="#f8f9fa",
+                                         wraplength=330, justify=tk.LEFT, anchor=tk.W)
+                exe_path_label.pack(fill=tk.X)
         
         # 狀態列
         status_var = tk.StringVar()
@@ -485,7 +576,9 @@ class WindowLayoutManager:
         dialog_width = 350
         # 基礎高度 + 標題實際高度
         base_height = 270  # 狀態列 + 表單 + 按鈕的基礎高度
-        dialog_height = base_height + title_height + 16  # 16 是 title_frame 的 pady
+        # 如果有執行檔資訊，增加額外高度（考慮執行檔名稱和路徑兩行）
+        exe_info_height = 70 if exe_name else 0
+        dialog_height = base_height + title_height + 16 + exe_info_height  # 16 是 title_frame 的 pady
         
         screen_width = dialog.winfo_screenwidth()
         screen_height = dialog.winfo_screenheight()
