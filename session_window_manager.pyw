@@ -303,6 +303,7 @@ class WindowLayoutManager:
         editor_window = tk.Toplevel(self.root)
         editor_window.title("編輯視窗佈局")
         editor_window.geometry("900x500")
+        editor_window.transient(self.root)  # 建立父子關係
         
         try:
             editor_window.iconbitmap(resource_path('favicon.ico'))
@@ -381,7 +382,7 @@ class WindowLayoutManager:
             hwnd = int(item)
             
             if hwnd in self.saved_layout:
-                self.open_full_edit_dialog(hwnd, item, tree)
+                self.open_full_edit_dialog(hwnd, item, tree, editor_window)
         
         tree.bind("<Double-1>", on_double_click)
         
@@ -483,16 +484,19 @@ class WindowLayoutManager:
                                    bg="#f8d7da", activebackground="#f5c6cb", relief=tk.FLAT)
         force_close_btn.pack(side=tk.RIGHT, padx=5)
 
-    def open_full_edit_dialog(self, hwnd, hwnd_str, tree):
+    def open_full_edit_dialog(self, hwnd, hwnd_str, tree, parent_window=None):
         """編輯所有參數的對話框"""
         layout = self.saved_layout[hwnd]
         title = layout.get('title_at_save', '未知視窗')
         exe_name = layout.get('exe_name', '')
         exe_path = layout.get('exe_path', '')
         
-        dialog = tk.Toplevel(self.root)
+        parent = parent_window if parent_window else self.root
+        dialog = tk.Toplevel(parent)
         dialog.title("編輯視窗位置")
         dialog.resizable(False, False)
+        dialog.transient(parent)  # 建立父子關係
+        dialog.grab_set()  # 設定為模態對話框，父視窗無法操作
         
         try:
             dialog.iconbitmap(resource_path('favicon.ico'))
@@ -658,6 +662,7 @@ class WindowLayoutManager:
         dialog.title(f"編輯 {col_names[col_index]}")
         dialog.geometry("300x150")
         dialog.resizable(False, False)
+        dialog.transient(self.root)  # 建立父子關係
         
         try:
             dialog.iconbitmap(resource_path('favicon.ico'))
@@ -737,6 +742,7 @@ class WindowLayoutManager:
         dialog.title("編輯視窗位置")
         dialog.geometry("400x300")
         dialog.resizable(False, False)
+        dialog.transient(self.root)  # 建立父子關係
         
         # 標題顯示
         title_label = tk.Label(dialog, text=f"視窗: {layout.get('title_at_save', '未知視窗')}", 
