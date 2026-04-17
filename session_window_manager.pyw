@@ -101,7 +101,13 @@ class WindowLayoutManager:
             # 保留檔案總管視窗
             if 'explorer.exe' in exe_path_lower:
                 return False
-            
+
+            # 保留常見終端機（即使位於系統路徑下）
+            terminal_exes = ('conhost.exe', 'cmd.exe', 'powershell.exe', 'pwsh.exe',
+                             'wt.exe', 'windowsterminal.exe', 'openconsole.exe')
+            if os.path.basename(exe_path_lower) in terminal_exes:
+                return False
+
             # 排除系統資料夾下的程式
             system_paths = [
                 'c:\\windows\\system32\\',
