@@ -27,9 +27,13 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
 
+      - name: Write version file
+        run: |
+          Set-Content -Path version.py -Value "__version__ = `"${{ github.ref_name }}`""
+
       - name: Build executable with PyInstaller
         run: |
-          pyinstaller --onefile --noconsole --add-data "favicon.ico;." --icon=favicon.ico session_window_manager.pyw
+          pyinstaller --onefile --noconsole --uac-admin --add-data "favicon.ico;." --icon=favicon.ico session_window_manager.pyw
 
       - name: Get tag name
         id: tag

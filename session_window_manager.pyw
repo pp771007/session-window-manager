@@ -9,6 +9,8 @@ import threading
 import sys
 import os
 
+from version import __version__
+
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
@@ -22,7 +24,7 @@ def resource_path(relative_path):
 class WindowLayoutManager:
     def __init__(self, root):
         self.root = root
-        self.APP_TITLE = "視窗佈局管理員"
+        self.APP_TITLE = f"視窗佈局管理員 {__version__}"
         
         self.saved_layout = {}
 

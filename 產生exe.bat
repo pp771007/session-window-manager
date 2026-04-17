@@ -1,16 +1,16 @@
 @echo off
 setlocal enabledelayedexpansion
 
-rem §ä¨ì²Ä¤@­Ó.py©Î.pywÀÉ®×
-for %%f in (*.py *.pyw) do (
+rem ï¿½ï¿½ï¿½Ä¤@ï¿½ï¿½.pywï¿½É®ï¿½
+for %%f in (*.pyw) do (
     set "py_file=%%f"
-	echo ¦³§ä¨ìpyhtonÀÉ®×: "!py_file!"
+	echo ï¿½ï¿½ï¿½ï¿½ï¿½pyhtonï¿½É®ï¿½: "!py_file!"
     goto :py_found
 )
 
 :py_found
 
-rem ÀË¬d¬O§_¦s¦b.icoÀÉ®×
+rem ï¿½Ë¬dï¿½Oï¿½_ï¿½sï¿½b.icoï¿½É®ï¿½
 for %%i in (*.ico) do (
     set "custom_icon=%%i"
     goto :icon_found
@@ -18,21 +18,21 @@ for %%i in (*.ico) do (
 
 :icon_found
 
-rem ¨Ï¥Îpyinstaller¥Í¦¨¥i°õ¦æÀÉ¡A«ü©w¦Û­q¹Ï¥Ü
+rem ï¿½Ï¥ï¿½pyinstallerï¿½Í¦ï¿½ï¿½iï¿½ï¿½ï¿½ï¿½ï¿½É¡Aï¿½ï¿½ï¿½wï¿½Û­qï¿½Ï¥ï¿½
 if defined custom_icon (
-	echo ¦³§ä¨ì¹Ï¥ÜÀÉ: "!custom_icon!"
-    pyinstaller --onefile --add-data "!custom_icon!;." --icon=!custom_icon! "!py_file!"
+	echo ï¿½ï¿½ï¿½ï¿½ï¿½Ï¥ï¿½ï¿½ï¿½: "!custom_icon!"
+    pyinstaller --onefile --noconsole --uac-admin --add-data "!custom_icon!;." --icon=!custom_icon! "!py_file!"
 ) else (
-    rem ¨Ï¥Îpyinstaller¥Í¦¨¥i°õ¦æÀÉ¡A¤£«ü©w¹Ï¥Ü
-    pyinstaller --onefile --noconsole "!py_file!"
+    rem ï¿½Ï¥ï¿½pyinstallerï¿½Í¦ï¿½ï¿½iï¿½ï¿½ï¿½ï¿½ï¿½É¡Aï¿½ï¿½ï¿½ï¿½ï¿½wï¿½Ï¥ï¿½
+    pyinstaller --onefile --noconsole --uac-admin "!py_file!"
 )
 
-rem ´M§ä¥Í¦¨ªº¥i°õ¦æÀÉ
+rem ï¿½Mï¿½ï¿½Í¦ï¿½ï¿½ï¿½ï¿½iï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 for %%i in (dist\*.exe) do (
     move "%%i" .
 )
 
-rem §R°£build¸ê®Æ§¨¡Bdist¸ê®Æ§¨©M.specÀÉ®×
+rem ï¿½Rï¿½ï¿½buildï¿½ï¿½Æ§ï¿½ï¿½Bdistï¿½ï¿½Æ§ï¿½ï¿½M.specï¿½É®ï¿½
 rd /s /q build
 rd /s /q dist
 del *.spec
