@@ -8,6 +8,7 @@ This is a lightweight desktop utility for Windows designed to help users quickly
 
 *   **一鍵儲存 (One-Click Save):** 立即擷取所有可見、非最小化視窗的位置、大小和層疊順序 (Z-order)。
 *   **一鍵恢復 (One-Click Restore):** 將已記錄的視窗恢復到它們被儲存時的狀態，包括精確的位置、大小和前後順序。
+*   **螢幕重新連接時自動恢復 (Auto Restore on Display Reconnect):** 螢幕關閉再打開、Windows 把視窗擠亂之後，等螢幕穩定 3 秒就自動恢復到最後一次儲存的佈局；螢幕配置與儲存時不同（例如多接了投影機）則不動作。
 *   **自動偵測新視窗 (Automatic New Window Detection):** 程式在背景每分鐘會自動掃描，並將新開啟的視窗加入佈局記憶體中，而不會影響原有的紀錄。
 *   **智慧型恢復 (Intelligent Restore):** 即使視窗被最小化或最大化，也能將其恢復到正常的視窗狀態和位置。
 *   **詳細報告與狀態列 (Detailed Reports & Status Bar):** 恢復後會提供摘要報告，且主介面下方有即時狀態列，顯示最新操作與時間。

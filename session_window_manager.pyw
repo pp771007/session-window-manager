@@ -11,6 +11,13 @@ import os
 
 from version import __version__
 
+DISPLAY_WATCHER_CLASS = "SessionWindowManagerDisplayWatcher"
+# Measured on a monitor power-on: WM_DISPLAYCHANGE arrives in a ~1 s burst and Windows stops
+# moving windows within ~1 s after the last one. Restoring earlier gets overwritten by Windows.
+DISPLAY_SETTLE_SEC = 3
+DISPLAY_POLL_MS = 500
+
+
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
@@ -21,17 +28,80 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
+
+def monitor_geometry():
+    """Sorted monitor rects. Device names are not compared: the same monitor came back as
+    DISPLAY1 one time and DISPLAY2 the next."""
+    return tuple(sorted(win32api.GetMonitorInfo(hmon)["Monitor"]
+                        for hmon, _, _ in win32api.EnumDisplayMonitors()))
+
+
+class DisplayChangeWatcher:
+    """Receives WM_DISPLAYCHANGE on a hidden window with its own message loop.
+
+    Why not the alternatives (all measured):
+    - Tk's window does not hand Windows messages to Python.
+    - Monitor power notifications (GUID_CONSOLE_DISPLAY_STATE / MONITOR_POWER_ON) never fire when
+      the monitor is switched off by its own button; only the reconnect at power-on shows up.
+    - Polling the monitor list can miss that reconnect: it flickers through 1920x1080 for under a
+      second and ends at the same geometry it started from, while windows have already been moved.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._last_change = None
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        wc = win32gui.WNDCLASS()
+        wc.lpszClassName = DISPLAY_WATCHER_CLASS
+        wc.hInstance = win32api.GetModuleHandle(None)
+        wc.lpfnWndProc = {win32con.WM_DISPLAYCHANGE: self._on_display_change}
+        win32gui.RegisterClass(wc)
+        # Hidden top-level window, not HWND_MESSAGE: broadcasts skip message-only windows.
+        win32gui.CreateWindow(wc.lpszClassName, DISPLAY_WATCHER_CLASS, 0, 0, 0, 0, 0,
+                              0, 0, wc.hInstance, None)
+        win32gui.PumpMessages()
+
+    def _on_display_change(self, hwnd, msg, wparam, lparam):
+        with self._lock:
+            self._last_change = time.monotonic()
+        return 0
+
+    def take_settled_change(self, settle_sec):
+        """True once per burst of display changes, after settle_sec without a new one."""
+        with self._lock:
+            if self._last_change is None or time.monotonic() - self._last_change < settle_sec:
+                return False
+            self._last_change = None
+            return True
+
+
 class WindowLayoutManager:
     def __init__(self, root):
         self.root = root
         self.APP_TITLE = f"視窗佈局管理員 {__version__}"
         
         self.saved_layout = {}
+        self.saved_monitors = None
+        self._restore_thread = None
 
         self._setup_gui()
-        
+
         self.root.after(100, lambda: self.save_window_positions(silent=True))
         self.root.after(60000, self.auto_update_layout)
+
+        self.display_watcher = DisplayChangeWatcher()
+        self.root.after(DISPLAY_POLL_MS, self._check_display_change)
+
+    def _check_display_change(self):
+        if self.display_watcher.take_settled_change(DISPLAY_SETTLE_SEC):
+            if monitor_geometry() == self.saved_monitors:
+                print("螢幕重新連接，自動恢復佈局")
+                self.restore_window_positions_threaded()
+            else:
+                self._set_status("螢幕配置與儲存時不同，未自動恢復。")
+        self.root.after(DISPLAY_POLL_MS, self._check_display_change)
 
     def _setup_gui(self):
         self.root.title(self.APP_TITLE)
@@ -147,6 +217,7 @@ class WindowLayoutManager:
 
     def save_window_positions(self, silent=False):
         self.saved_layout.clear()
+        self.saved_monitors = monitor_geometry()
 
         all_windows = self._get_all_windows()
 
@@ -184,10 +255,12 @@ class WindowLayoutManager:
             print(status_msg + " (舊紀錄已被覆蓋)")
 
     def restore_window_positions_threaded(self):
+        if self._restore_thread and self._restore_thread.is_alive():
+            return
         self._set_status("正在恢復佈局...")
-        
-        thread = threading.Thread(target=self.restore_window_positions)
-        thread.start()
+
+        self._restore_thread = threading.Thread(target=self.restore_window_positions)
+        self._restore_thread.start()
 
     def _finalize_restore(self, restored_count, num_closed_windows, permission_denied_titles, current_hwnds_len):
         has_issues = bool(permission_denied_titles)
@@ -223,8 +296,8 @@ class WindowLayoutManager:
         
         print(f"開始恢復 {len(current_hwnds)} 個視窗的位置...")
         
-        # 恢復位置和大小
-        for hwnd, layout in self.saved_layout.items():
+        # 走副本：auto_update_layout 可能在主執行緒同時新增項目
+        for hwnd, layout in list(self.saved_layout.items()):
             try:
                 title = layout.get('title_at_save', '未知視窗')
                 self.root.after(0, self._set_status, f"正在恢復位置: {title}")
